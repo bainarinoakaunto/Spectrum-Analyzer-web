@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spectrum Analyzer</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+}
+
+body {
+    background:
+        radial-gradient(circle at top, #182033 0%, #080b12 55%, #05070b 100%);
+    color: #fff;
+    font-family: Arial, "Noto Sans JP", sans-serif;
+    overflow: hidden;
+}
+
+.app {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ヘッダー */
+header {
+    height: 70px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 28px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    background: rgba(8,11,18,.85);
+    backdrop-filter: blur(14px);
+}
+
+.logo {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 2px;
+}
+
+.logo span {
+    opacity: .5;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: #aeb8c9;
+    font-size: 13px;
+}
+
+.status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #626b7b;
+}
+
+.status-dot.active {
+    background: #39ff9b;
+    box-shadow: 0 0 14px rgba(57,255,155,.8);
+}
+
+/* メイン */
+main {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0,1fr) 310px;
+    gap: 18px;
+    padding: 18px;
+}
+
+/* グラフ */
+.visualizer {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 18px;
+    background: rgba(10,14,22,.82);
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,.3);
+}
+
+.visualizer-title {
+    position: absolute;
+    top: 18px;
+    left: 20px;
+    z-index: 2;
+    color: #7e8ba0;
+    font-size: 12px;
+    letter-spacing: 2px;
+}
+
+#spectrum {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* サイド */
+.sidebar {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.card {
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 16px;
+    background: rgba(14,19,29,.88);
+    padding: 20px;
+}
+
+.card-title {
+    color: #758197;
+    font-size: 11px;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+}
+
+.big-number {
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.unit {
+    color: #758197;
+    font-size: 13px;
+}
+
+/* 情報 */
+.info {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    color: #9ba6b8;
+    font-size: 13px;
+}
+
+.info-row strong {
+    color: #fff;
+}
+
+/* 操作 */
+.controls {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+button {
+    width: 100%;
+    border: 0;
+    border-radius: 10px;
+    padding: 13px 12px;
+    color: #fff;
+    background: #20293a;
+    cursor: pointer;
+    font-size: 13px;
+    transition: .15s;
+}
+
+button:hover {
+    background: #2b374d;
+    transform: translateY(-1px);
+}
+
+button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+    transform: none;
+}
+
+button.start {
+    background: #174e3a;
+}
+
+button.start:hover {
+    background: #1d6549;
+}
+
+button.stop {
+    background: #49252d;
+}
+
+button.stop:hover {
+    background: #63303b;
+}
+
+.footer {
+    margin-top: auto;
+    color: #586476;
+    font-size: 11px;
+    text-align: center;
+}
+
+/* スマホ */
+@media (max-width: 850px) {
+    body {
+        overflow: auto;
+    }
+
+    .app {
+        height: auto;
+        min-height: 100vh;
+    }
+
+    main {
+        grid-template-columns: 1fr;
+    }
+
+    .visualizer {
+        height: 55vh;
+        min-height: 400px;
+    }
+
+    .sidebar {
+        display: grid;
+        grid-template-columns: repeat(2,1fr);
+    }
+
+    .controls {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 520px) {
+    header {
+        padding: 0 15px;
+    }
+
+    .logo {
+        font-size: 16px;
+    }
+
+    main {
+        padding: 10px;
+    }
+
+    .sidebar {
+        grid-template-columns: 1fr;
+    }
+
+    .controls {
+        grid-column: auto;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+<header>
+    <div class="logo">
+        〽 SPECTRUM <span>ANALYZER</span>
+    </div>
+
+    <div class="status">
+        <div id="statusDot" class="status-dot"></div>
+        <span id="statusText">待機中</span>
+    </div>
+</header>
+
+<main>
+
+<section class="visualizer">
+    <div class="visualizer-title">
+        REALTIME FREQUENCY
+    </div>
+
+    <canvas id="spectrum"></canvas>
+</section>
+
+<aside class="sidebar">
+
+    <div class="card">
+        <div class="card-title">AUDIO LEVEL</div>
+
+        <div>
+            <span id="level" class="big-number">-60.0</span>
+            <span class="unit">dB</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">PEAK FREQUENCY</div>
+
+        <div>
+            <span id="frequency" class="big-number">0</span>
+            <span class="unit">Hz</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">AUDIO INFO</div>
+
+        <div class="info">
+
+            <div class="info-row">
+                <span>解析方式</span>
+                <strong>FFT</strong>
+            </div>
+
+            <div class="info-row">
+                <span>解析側</span>
+                <strong>Browser</strong>
+            </div>
+
+            <div class="info-row">
+                <span>サンプルレート</span>
+                <strong id="sampleRate">---</strong>
+            </div>
+
+            <div class="info-row">
+                <span>FFTサイズ</span>
+                <strong id="fftSize">4096</strong>
+            </div>
+
+            <div class="info-row">
+                <span>状態</span>
+                <strong id="connection">停止中</strong>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="card controls">
+
+        <div class="card-title">CONTROL</div>
+
+        <button
+            id="startButton"
+            class="start"
+            onclick="startAnalyzer()">
+            🎙 マイクを開始
+        </button>
+
+        <button
+            id="pauseButton"
+            onclick="togglePause()"
+            disabled>
+            ⏸ 一時停止
+        </button>
+
+        <button
+            id="stopButton"
+            class="stop"
+            onclick="stopAnalyzer()"
+            disabled>
+            ■ 停止
+        </button>
+
+        <button onclick="clearGraph()">
+            ✕ グラフをクリア
+        </button>
+
+    </div>
+
+    <div class="footer">
+        Web Audio API • FFT Spectrum Analyzer
+    </div>
+
+</aside>
+
+</main>
+</div>
+
+<script>
+
+/* ========================================
+   基本設定
+======================================== */
+
+const canvas = document.getElementById("spectrum");
+const ctx = canvas.getContext("2d");
+
+const levelElement =
+    document.getElementById("level");
+
+const frequencyElement =
+    document.getElementById("frequency");
+
+const sampleRateElement =
+    document.getElementById("sampleRate");
+
+const fftSizeElement =
+    document.getElementById("fftSize");
+
+const connectionElement =
+    document.getElementById("connection");
+
+const statusText =
+    document.getElementById("statusText");
+
+const statusDot =
+    document.getElementById("statusDot");
+
+const startButton =
+    document.getElementById("startButton");
+
+const pauseButton =
+    document.getElementById("pauseButton");
+
+const stopButton =
+    document.getElementById("stopButton");
+
+
+let audioContext = null;
+let analyser = null;
+let microphone = null;
+let stream = null;
+
+let frequencyData = null;
+let timeData = null;
+
+let animationId = null;
+
+let paused = false;
+
+let bars = new Array(128).fill(0);
+
+
+/* ========================================
+   Canvas
+======================================== */
+
+function resizeCanvas() {
+
+    const rect =
+        canvas.getBoundingClientRect();
+
+    const dpr =
+        window.devicePixelRatio || 1;
+
+    canvas.width =
+        rect.width * dpr;
+
+    canvas.height =
+        rect.height * dpr;
+
+    ctx.setTransform(
+        dpr,
+        0,
+        0,
+        dpr,
+        0,
+        0
+    );
+}
+
+window.addEventListener(
+    "resize",
+    resizeCanvas
+);
+
+resizeCanvas();
+
+
+/* ========================================
+   マイク開始
+======================================== */
+
+async function startAnalyzer() {
+
+    try {
+
+        if (!navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia) {
+
+            throw new Error(
+                "このブラウザではマイク機能を使用できません。"
+            );
+        }
+
+
+        statusText.textContent =
+            "マイク許可を確認中...";
+
+
+        stream =
+            await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                }
+            });
+
+
+        /* AudioContext */
+
+        const AudioContext =
+            window.AudioContext ||
+            window.webkitAudioContext;
+
+        audioContext =
+            new AudioContext();
+
+
+        if (
+            audioContext.state === "suspended"
+        ) {
+            await audioContext.resume();
+        }
+
+
+        /* マイク */
+
+        microphone =
+            audioContext.createMediaStreamSource(
+                stream
+            );
+
+
+        /* FFT */
+
+        analyser =
+            audioContext.createAnalyser();
+
+        analyser.fftSize = 4096;
+
+        analyser.smoothingTimeConstant =
+            0.72;
+
+        analyser.minDecibels = -90;
+        analyser.maxDecibels = -10;
+
+
+        microphone.connect(analyser);
+
+
+        /* 配列 */
+
+        frequencyData =
+            new Uint8Array(
+                analyser.frequencyBinCount
+            );
+
+        timeData =
+            new Uint8Array(
+                analyser.fftSize
+            );
+
+
+        /* 情報 */
+
+        sampleRateElement.textContent =
+            audioContext.sampleRate +
+            " Hz";
+
+        fftSizeElement.textContent =
+            analyser.fftSize;
+
+
+        /* 状態 */
+
+        paused = false;
+
+        statusText.textContent =
+            "解析中";
+
+        connectionElement.textContent =
+            "動作中";
+
+        statusDot.classList.add(
+            "active"
+        );
+
+
+        startButton.disabled = true;
+        pauseButton.disabled = false;
+        stopButton.disabled = false;
+
+
+        draw();
+
+    } catch (error) {
+
+        console.error(error);
+
+        statusText.textContent =
+            "マイクを使用できません";
+
+        connectionElement.textContent =
+            "エラー";
+
+        alert(
+            "マイクを使用できませんでした。\n\n" +
+            "ブラウザのマイク許可を確認してください。"
+        );
+    }
+}
+
+
+/* ========================================
+   一時停止
+======================================== */
+
+function togglePause() {
+
+    if (!audioContext) return;
+
+    paused = !paused;
+
+    if (paused) {
+
+        pauseButton.textContent =
+            "▶ 再開";
+
+        statusText.textContent =
+            "一時停止";
+
+        connectionElement.textContent =
+            "一時停止";
+
+    } else {
+
+        pauseButton.textContent =
+            "⏸ 一時停止";
+
+        statusText.textContent =
+            "解析中";
+
+        connectionElement.textContent =
+            "動作中";
+    }
+}
+
+
+/* ========================================
+   停止
+======================================== */
+
+function stopAnalyzer() {
+
+    if (animationId) {
+
+        cancelAnimationFrame(
+            animationId
+        );
+
+        animationId = null;
+    }
+
+
+    if (stream) {
+
+        stream
+            .getTracks()
+            .forEach(track => track.stop());
+
+        stream = null;
+    }
+
+
+    if (audioContext) {
+
+        audioContext.close();
+
+        audioContext = null;
+    }
+
+
+    analyser = null;
+    microphone = null;
+
+    frequencyData = null;
+    timeData = null;
+
+    paused = false;
+
+    bars =
+        new Array(128).fill(0);
+
+
+    levelElement.textContent =
+        "-60.0";
+
+    frequencyElement.textContent =
+        "0";
+
+    connectionElement.textContent =
+        "停止中";
+
+    statusText.textContent =
+        "待機中";
+
+    statusDot.classList.remove(
+        "active"
+    );
+
+
+    startButton.disabled = false;
+    pauseButton.disabled = true;
+    stopButton.disabled = true;
+
+    pauseButton.textContent =
+        "⏸ 一時停止";
+
+    drawIdle();
+}
+
+
+/* ========================================
+   音声解析
+======================================== */
+
+function analyzeAudio() {
+
+    if (!analyser ||
+        !frequencyData ||
+        !timeData) {
+
+        return;
+    }
+
+
+    analyser.getByteFrequencyData(
+        frequencyData
+    );
+
+    analyser.getByteTimeDomainData(
+        timeData
+    );
+
+
+    /* --------------------
+       音量 RMS
+    -------------------- */
+
+    let sum = 0;
+
+    for (
+        let i = 0;
+        i < timeData.length;
+        i++
+    ) {
+
+        const value =
+            (timeData[i] - 128) / 128;
+
+        sum += value * value;
+    }
+
+    const rms =
+        Math.sqrt(
+            sum / timeData.length
+        );
+
+    let db;
+
+    if (rms <= 0) {
+
+        db = -60;
+
+    } else {
+
+        db =
+            20 *
+            Math.log10(rms);
+
+        db =
+            Math.max(
+                -60,
+                Math.min(0, db)
+            );
+    }
+
+
+    levelElement.textContent =
+        db.toFixed(1);
+
+
+    /* --------------------
+       ピーク周波数
+    -------------------- */
+
+    let peakIndex = 0;
+    let peakValue = 0;
+
+    for (
+        let i = 1;
+        i < frequencyData.length;
+        i++
+    ) {
+
+        if (
+            frequencyData[i] >
+            peakValue
+        ) {
+
+            peakValue =
+                frequencyData[i];
+
+            peakIndex = i;
+        }
+    }
+
+
+    const peakFrequency =
+        peakIndex *
+        audioContext.sampleRate /
+        analyser.fftSize;
+
+
+    if (peakFrequency < 1000) {
+
+        frequencyElement.textContent =
+            Math.round(peakFrequency);
+
+    } else {
+
+        frequencyElement.textContent =
+            (peakFrequency / 1000)
+                .toFixed(2) + "k";
+    }
+
+
+    /* --------------------
+       128本のバーへ変換
+    -------------------- */
+
+    const minFrequency = 30;
+    const maxFrequency = 20000;
+
+    const minBin =
+        Math.floor(
+            minFrequency *
+            analyser.fftSize /
+            audioContext.sampleRate
+        );
+
+    const maxBin =
+        Math.min(
+            frequencyData.length - 1,
+            Math.ceil(
+                maxFrequency *
+                analyser.fftSize /
+                audioContext.sampleRate
+            )
+        );
+
+
+    const newBars = [];
+
+    for (
+        let i = 0;
+        i < 128;
+        i++
+    ) {
+
+        /*
+         * 対数スケールにして、
+         * 低音から高音まで見やすくする
+         */
+
+        const ratio =
+            i / 127;
+
+        const start =
+            Math.floor(
+                minBin *
+                Math.pow(
+                    maxBin / minBin,
+                    ratio
+                )
+            );
+
+        const nextRatio =
+            (i + 1) / 127;
+
+        const end =
+            Math.max(
+                start + 1,
+                Math.floor(
+                    minBin *
+                    Math.pow(
+                        maxBin / minBin,
+                        nextRatio
+                    )
+                )
+            );
+
+
+        let total = 0;
+        let count = 0;
+
+        for (
+            let j = start;
+            j < end &&
+            j < frequencyData.length;
+            j++
+        ) {
+
+            total +=
+                frequencyData[j];
+
+            count++;
+        }
+
+
+        const average =
+            count > 0
+                ? total / count
+                : 0;
+
+
+        /*
+         * 0～255 → 0～100
+         */
+
+        const value =
+            (average / 255) * 100;
+
+
+        newBars.push(value);
+    }
+
+
+    /*
+     * スムージング
+     */
+
+    for (
+        let i = 0;
+        i < newBars.length;
+        i++
+    ) {
+
+        bars[i] =
+            bars[i] * 0.65 +
+            newBars[i] * 0.35;
+    }
+}
+
+
+/* ========================================
+   グラフ描画
+======================================== */
+
+function draw() {
+
+    animationId =
+        requestAnimationFrame(draw);
+
+
+    if (!paused) {
+        analyzeAudio();
+    }
+
+
+    drawCanvas();
+}
+
+
+/* ========================================
+   Canvas描画
+======================================== */
+
+function drawCanvas() {
+
+    const width =
+        canvas.clientWidth;
+
+    const height =
+        canvas.clientHeight;
+
+
+    ctx.clearRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+
+    /* 背景 */
+
+    ctx.fillStyle =
+        "#090d15";
+
+    ctx.fillRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+
+    /* グリッド */
+
+    ctx.strokeStyle =
+        "rgba(255,255,255,.055)";
+
+    ctx.lineWidth = 1;
+
+
+    for (
+        let i = 0;
+        i < 9;
+        i++
+    ) {
+
+        const y =
+            70 +
+            ((height - 120) / 8) *
+            i;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            20,
+            y
+        );
+
+        ctx.lineTo(
+            width - 20,
+            y
+        );
+
+        ctx.stroke();
+    }
+
+
+    /* dB ラベル */
+
+    ctx.font =
+        "10px Arial";
+
+    ctx.fillStyle =
+        "#596579";
+
+
+    const dbLabels = [
+        "0 dB",
+        "-15 dB",
+        "-30 dB",
+        "-45 dB",
+        "-60 dB",
+        "-75 dB",
+        "-90 dB"
+    ];
+
+
+    dbLabels.forEach(
+        (label, index) => {
+
+            const y =
+                82 +
+                index *
+                ((height - 150) / 6);
+
+            ctx.fillText(
+                label,
+                24,
+                y
+            );
+        }
+    );
+
+
+    /* 周波数ラベル */
+
+    const labels = [
+        "30Hz",
+        "100Hz",
+        "300Hz",
+        "1kHz",
+        "3kHz",
+        "10kHz",
+        "20kHz"
+    ];
+
+
+    ctx.font =
+        "11px Arial";
+
+    ctx.fillStyle =
+        "#596579";
+
+
+    labels.forEach(
+        (label, index) => {
+
+            const x =
+                20 +
+                ((width - 40) /
+                (labels.length - 1)) *
+                index;
+
+            ctx.fillText(
+                label,
+                x,
+                height - 22
+            );
+        }
+    );
+
+
+    /* バー */
+
+    const count =
+        bars.length;
+
+    const gap = 2;
+
+    const usableWidth =
+        width - 40;
+
+    const barWidth =
+        Math.max(
+            1,
+            usableWidth / count - gap
+        );
+
+
+    for (
+        let i = 0;
+        i < count;
+        i++
+    ) {
+
+        const value =
+            bars[i] || 0;
+
+
+        const maxHeight =
+            Math.max(
+                10,
+                height - 130
+            );
+
+
+        const barHeight =
+            Math.max(
+                1,
+                (value / 100) *
+                maxHeight
+            );
+
+
+        const x =
+            20 +
+            i *
+            (usableWidth / count);
+
+
+        const y =
+            height -
+            50 -
+            barHeight;
+
+
+        const gradient =
+            ctx.createLinearGradient(
+                0,
+                y,
+                0,
+                height - 50
+            );
+
+
+        gradient.addColorStop(
+            0,
+            "#ffffff"
+        );
+
+        gradient.addColorStop(
+            .3,
+            "#72e5ff"
+        );
+
+        gradient.addColorStop(
+            1,
+            "#4169ff"
+        );
+
+
+        ctx.fillStyle =
+            gradient;
+
+
+        ctx.fillRect(
+            x,
+            y,
+            barWidth,
+            barHeight
+        );
+    }
+}
+
+
+/* ========================================
+   待機画面
+======================================== */
+
+function drawIdle() {
+
+    bars =
+        bars.map(
+            value => value * 0.85
+        );
+
+    drawCanvas();
+
+    requestAnimationFrame(
+        drawIdleFrame
+    );
+}
+
+function drawIdleFrame() {
+
+    if (!audioContext) {
+
+        bars =
+            bars.map(
+                value => value * 0.85
+            );
+
+        drawCanvas();
+
+        requestAnimationFrame(
+            drawIdleFrame
+        );
+    }
+}
+
+drawCanvas();
+
+</script>
+
+</body>
+</html>
